@@ -27,16 +27,18 @@ MODULE_PROVIDES=(
 )
 
 # =============================================================================
-# PACKAGE ADAPTATION
+# PACKAGE ADAPTATION (per package manager)
 # =============================================================================
 
 declare -A MODULE_PACKAGES
 
-MODULE_PACKAGES[arch]="wl-clipboard"
-MODULE_PACKAGES[debian]="wl-clipboard"
-MODULE_PACKAGES[ubuntu]="wl-clipboard"
-MODULE_PACKAGES[fedora]="wl-clipboard"
-MODULE_PACKAGES[opensuse]="wl-clipboard"
+MODULE_PACKAGES[pacman]="wl-clipboard"
+MODULE_PACKAGES[apt]="wl-clipboard"
+MODULE_PACKAGES[dnf]="wl-clipboard"
+MODULE_PACKAGES[zypper]="wl-clipboard"
+MODULE_PACKAGES[apk]="wl-clipboard"
+MODULE_PACKAGES[xbps]="wl-clipboard"
+MODULE_PACKAGES[emerge]="wl-clipboard"
 
 # =============================================================================
 # PROOF & INSTALL
@@ -50,16 +52,16 @@ module_proofs() {
 
 module_install() {
     echo "Installing $MODULE_NAME..."
-    local distro
-    distro=$(distro_detect)
-    local packages="${MODULE_PACKAGES[$distro]}"
+    local pkgmgr
+    pkgmgr=$(pkgmgr_detect) || { echo "ERROR: Cannot detect package manager"; return 1; }
+    local packages="${MODULE_PACKAGES[$pkgmgr]}"
     
     if [[ -z "$packages" ]]; then
-        echo "No packages for $distro"
+        echo "No packages for $pkgmgr"
         return 1
     fi
     
-    pkg_install "$packages"
+    pkg_install "$packages" "$pkgmgr"
     echo "$MODULE_NAME installed"
 }
 

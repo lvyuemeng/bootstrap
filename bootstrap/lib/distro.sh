@@ -5,6 +5,10 @@
 # Provides cross-distribution package installation and init system service management
 # =============================================================================
 
+# Load logging
+BOOTSTRAP_DIR="${BOOTSTRAP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+source "${BOOTSTRAP_DIR}/lib/log.sh"
+
 # =============================================================================
 # DISTRIBUTION DETECTION
 # =============================================================================
@@ -93,139 +97,222 @@ init_detect() {
 }
 
 # =============================================================================
+# PACKAGE MANAGER DETECTION
+# =============================================================================
+
+# Detect the package manager directly
+# Usage: local pkgmgr=$(pkgmgr_detect)
+pkgmgr_detect() {
+    local pkgmgr=""
+    
+    # Check for package manager commands (in order of preference)
+    # Allow manual override via environment variable
+    if [[ -n "$BOOTSTRAP_PKGMGR" ]]; then
+        pkgmgr="$BOOTSTRAP_PKGMGR"
+    elif command -v pacman >/dev/null 2>&1; then
+        pkgmgr="pacman"
+    elif command -v apt >/dev/null 2>&1; then
+        pkgmgr="apt"
+    elif command -v dnf >/dev/null 2>&1; then
+        pkgmgr="dnf"
+    elif command -v zypper >/dev/null 2>&1; then
+        pkgmgr="zypper"
+    elif command -v apk >/dev/null 2>&1; then
+        pkgmgr="apk"
+    elif command -v xbps-install >/dev/null 2>&1; then
+        pkgmgr="xbps"
+    elif command -v emerge >/dev/null 2>&1; then
+        pkgmgr="emerge"
+    fi
+    
+    if [[ -z "$pkgmgr" ]]; then
+        log_error "Cannot detect package manager"
+        return 1
+    fi
+    
+    echo "$pkgmgr"
+}
+
+# Get package manager name (human-readable)
+# Usage: local name=$(pkgmgr_name [pkgmgr])
+pkgmgr_name() {
+    local pkgmgr="${1:-$(pkgmgr_detect)}"
+    
+    case "$pkgmgr" in
+        apt)        echo "APT" ;;
+        pacman)     echo "Pacman" ;;
+        dnf)        echo "DNF" ;;
+        zypper)     echo "Zypper" ;;
+        apk)        echo "APK" ;;
+        xbps)       echo "XBPS" ;;
+        emerge)     echo "Portage" ;;
+        *)          echo "Unknown" ;;
+    esac
+}
+
+# =============================================================================
 # PACKAGE MANAGEMENT
 # =============================================================================
 
-# Install packages (distribution-aware)
-# Usage: pkg_install "package1 package2" [distro]
+# Install packages (package-manager-aware)
+# Usage: pkg_install "package1 package2" [pkgmgr]
 pkg_install() {
     local packages="$1"
-    local distro="${2:-$(distro_detect)}"
+    local pkgmgr="${2:-$(pkgmgr_detect)}"
     
     if [[ -z "$packages" ]]; then
-        echo "No packages to install"
+        log_debug "No packages to install"
         return 0
     fi
     
-    echo "Installing packages: $packages (distro: $distro)"
+    if [[ -z "$pkgmgr" ]]; then
+        log_error "Cannot detect package manager"
+        return 1
+    fi
     
-    case "$distro" in
-        arch)
-            pacman -S --noconfirm $packages
-            ;;
-        debian|ubuntu|linuxmint)
+    log_info "Installing packages: $packages (pkgmgr: $pkgmgr)"
+    
+    case "$pkgmgr" in
+        apt)
             export DEBIAN_FRONTEND=noninteractive
             apt update -qq && apt install -y -qq $packages
             ;;
-        alpine)
-            apk add $packages
+        pacman)
+            pacman -S --noconfirm $packages
             ;;
-        void)
-            xbps-install -y $packages
-            ;;
-        gentoo)
-            emerge --ask --noreplace $packages
-            ;;
-        fedora|rhel|centos)
+        dnf)
             dnf install -y $packages
             ;;
-        opensuse)
+        zypper)
             zypper install -y --no-confirm $packages
             ;;
+        apk)
+            apk add $packages
+            ;;
+        xbps)
+            xbps-install -y $packages
+            ;;
+        emerge)
+            emerge --ask --noreplace $packages
+            ;;
         *)
-            echo "Unknown distribution: $distro"
-            echo "Please install manually: $packages"
+            log_error "Unknown package manager: $pkgmgr"
+            log_error "Please install manually: $packages"
             return 1
             ;;
     esac
 }
 
 # Remove packages
-# Usage: pkg_remove "package1 package2" [distro]
+# Usage: pkg_remove "package1 package2" [pkgmgr]
 pkg_remove() {
     local packages="$1"
-    local distro="${2:-$(distro_detect)}"
+    local pkgmgr="${2:-$(pkgmgr_detect)}"
     
-    echo "Removing packages: $packages (distro: $distro)"
+    if [[ -z "$pkgmgr" ]]; then
+        log_error "Cannot detect package manager"
+        return 1
+    fi
     
-    case "$distro" in
-        arch)
-            pacman -R --noconfirm $packages
-            ;;
-        debian|ubuntu)
+    log_info "Removing packages: $packages (pkgmgr: $pkgmgr)"
+    
+    case "$pkgmgr" in
+        apt)
             apt remove -y $packages
             ;;
-        alpine)
-            apk del $packages
+        pacman)
+            pacman -R --noconfirm $packages
             ;;
-        void)
-            xbps-remove -y $packages
-            ;;
-        gentoo)
-            emerge --deselect $packages
-            ;;
-        fedora|rhel)
+        dnf)
             dnf remove -y $packages
             ;;
+        zypper)
+            zypper remove -y $packages
+            ;;
+        apk)
+            apk del $packages
+            ;;
+        xbps)
+            xbps-remove -y $packages
+            ;;
+        emerge)
+            emerge --deselect $packages
+            ;;
         *)
-            echo "Unknown distribution: $distro"
+            log_error "Unknown package manager: $pkgmgr"
             return 1
             ;;
     esac
 }
 
 # Search for package
-# Usage: pkg_search "package-name" [distro]
+# Usage: pkg_search "package-name" [pkgmgr]
 pkg_search() {
     local pattern="$1"
-    local distro="${2:-$(distro_detect)}"
+    local pkgmgr="${2:-$(pkgmgr_detect)}"
     
-    case "$distro" in
-        arch)
-            pacman -Ss "$pattern"
-            ;;
-        debian|ubuntu)
+    if [[ -z "$pkgmgr" ]]; then
+        echo "ERROR: Cannot detect package manager"
+        return 1
+    fi
+    
+    case "$pkgmgr" in
+        apt)
             apt search "$pattern"
             ;;
-        alpine)
+        pacman)
+            pacman -Ss "$pattern"
+            ;;
+        dnf)
+            dnf search "$pattern"
+            ;;
+        zypper)
+            zypper search "$pattern"
+            ;;
+        apk)
             apk search "$pattern"
             ;;
-        void)
+        xbps)
             xbps-query -Rs "$pattern"
             ;;
-        gentoo)
+        emerge)
             emerge --search "$pattern"
-            ;;
-        fedora|rhel)
-            dnf search "$pattern"
             ;;
     esac
 }
 
 # Check if package is installed
-# Usage: pkg_installed "package" [distro]
+# Usage: pkg_installed "package" [pkgmgr]
 pkg_installed() {
     local package="$1"
-    local distro="${2:-$(distro_detect)}"
+    local pkgmgr="${2:-$(pkgmgr_detect)}"
     
-    case "$distro" in
-        arch)
-            pacman -Q "$package" &>/dev/null
-            ;;
-        debian|ubuntu)
+    if [[ -z "$pkgmgr" ]]; then
+        echo "ERROR: Cannot detect package manager"
+        return 1
+    fi
+    
+    case "$pkgmgr" in
+        apt)
             dpkg -l "$package" 2>/dev/null | grep -q "^ii"
             ;;
-        alpine)
+        pacman)
+            pacman -Q "$package" &>/dev/null
+            ;;
+        dnf)
+            rpm -q "$package" &>/dev/null
+            ;;
+        zypper)
+            rpm -q "$package" &>/dev/null
+            ;;
+        apk)
             apk info "$package" &>/dev/null
             ;;
-        void)
+        xbps)
             xbps-query -e "$package" &>/dev/null
             ;;
-        gentoo)
+        emerge)
             qlist "$package" &>/dev/null
-            ;;
-        fedora|rhel)
-            rpm -q "$package" &>/dev/null
             ;;
     esac
 }
@@ -240,7 +327,7 @@ svc_enable() {
     local service="$1"
     local init="${2:-$(init_detect)}"
     
-    echo "Enabling service: $service (init: $init)"
+    log_info "Enabling service: $service (init: $init)"
     
     case "$init" in
         systemd)
@@ -260,7 +347,7 @@ svc_enable() {
             update-rc.d "$service" defaults 2>/dev/null || true
             ;;
         *)
-            echo "Unknown init system: $init"
+            log_error "Unknown init system: $init"
             return 1
             ;;
     esac
@@ -272,7 +359,7 @@ svc_start() {
     local service="$1"
     local init="${2:-$(init_detect)}"
     
-    echo "Starting service: $service (init: $init)"
+    log_info "Starting service: $service (init: $init)"
     
     case "$init" in
         systemd)
@@ -299,7 +386,7 @@ svc_stop() {
     local service="$1"
     local init="${2:-$(init_detect)}"
     
-    echo "Stopping service: $service (init: $init)"
+    log_info "Stopping service: $service (init: $init)"
     
     case "$init" in
         systemd)
@@ -326,7 +413,7 @@ svc_restart() {
     local service="$1"
     local init="${2:-$(init_detect)}"
     
-    echo "Restarting service: $service (init: $init)"
+    log_info "Restarting service: $service (init: $init)"
     
     case "$init" in
         systemd)
@@ -443,8 +530,12 @@ system_init_version() {
 
 # Show system info summary
 system_info() {
+    local pkgmgr
+    pkgmgr=$(pkgmgr_detect) || pkgmgr="unknown"
+    
     echo "=== System Information ==="
-    echo "Distribution: $(distro_name) ($(distro_detect))"
+    echo "Distribution:  $(distro_name) ($(distro_detect))"
+    echo "Package Mgr:   $(pkgmgr_name "$pkgmgr") ($pkgmgr)"
     echo "Init System:  $(init_detect)"
     echo "Kernel:       $(system_kernel)"
     echo "Architecture: $(system_arch)"
@@ -464,6 +555,8 @@ system_info() {
 export -f distro_detect
 export -f distro_name
 export -f init_detect
+export -f pkgmgr_detect
+export -f pkgmgr_name
 export -f pkg_install
 export -f pkg_remove
 export -f pkg_search

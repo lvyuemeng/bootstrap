@@ -30,18 +30,19 @@ MODULE_PROVIDES=(
 )
 
 # =============================================================================
-# PACKAGE ADAPTATION (per distribution)
+# PACKAGE ADAPTATION (per package manager)
 # =============================================================================
 
 declare -A MODULE_PACKAGES
 
-# niri - typically built from source or available in AUR
-MODULE_PACKAGES[arch]="niri"  # AUR
-MODULE_PACKAGES[debian]=""    # build from source
-MODULE_PACKAGES[ubuntu]=""    # build from source
-MODULE_PACKAGES[fedora]="niri"
-MODULE_PACKAGES[opensuse]="niri"
-MODULE_PACKAGES[alpine]=""     # build from source
+# niri - typically built from source or available in AUR - keyed by package manager
+MODULE_PACKAGES[pacman]="niri"  # AUR
+MODULE_PACKAGES[apt]=""    # build from source
+MODULE_PACKAGES[dnf]="niri"
+MODULE_PACKAGES[zypper]="niri"
+MODULE_PACKAGES[apk]=""     # build from source
+MODULE_PACKAGES[xbps]="niri"
+MODULE_PACKAGES[emerge]=""
 
 # =============================================================================
 # PROOF VERIFICATION
@@ -77,25 +78,25 @@ module_proofs() {
 module_install() {
     echo "Installing $MODULE_NAME..."
     
-    local distro
-    distro=$(distro_detect)
+    local pkgmgr
+    pkgmgr=$(pkgmgr_detect) || { echo "ERROR: Cannot detect package manager"; return 1; }
     local init
     init=$(init_detect)
     
-    echo "Detected: distro=$distro, init=$init"
+    echo "Detected: pkgmgr=$pkgmgr, init=$init"
     
-    # Get packages for this distro
-    local packages="${MODULE_PACKAGES[$distro]}"
+    # Get packages for this pkgmgr
+    local packages="${MODULE_PACKAGES[$pkgmgr]}"
     
     if [[ -z "$packages" ]]; then
-        echo "Warning: niri not available as package for $distro"
+        echo "Warning: niri not available as package for $pkgmgr"
         echo "Please build from source: https://github.com/YaLTeR/niri"
         echo "Or use cargo: cargo install niri"
         return 1
     fi
     
     echo "Installing packages: $packages"
-    pkg_install "$packages"
+    pkg_install "$packages" "$pkgmgr"
     
     # Setup niri config
     setup_niri_config

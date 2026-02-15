@@ -27,7 +27,7 @@ MODULE_PROVIDES=(
 )
 
 # =============================================================================
-# PACKAGE ADAPTATION (per distribution)
+# PACKAGE ADAPTATION (per package manager)
 # =============================================================================
 
 declare -A MODULE_PACKAGES
@@ -36,31 +36,30 @@ declare -A MODULE_PACKAGES
 # Open source: nouveau (not recommended for gaming)
 # Proprietary: nvidia
 
-# NVIDIA proprietary driver
-MODULE_PACKAGES[arch]="nvidia nvidia-utils nvidia-settings"
-MODULE_PACKAGES[debian]="nvidia-driver libnvidia-gl-*.so.* nvidia-settings"
-MODULE_PACKAGES[ubuntu]="nvidia-driver-535 nvidia-settings"
-MODULE_PACKAGES[fedora]="akmod-nvidia xorg-x11-drv-nvidia-cuda"
-MODULE_PACKAGES[opensuse]="nvidia-driver-G06"
-MODULE_PACKAGES[alpine]="nvidia nvidia-utils"
-MODULE_PACKAGES[void]="nvidia"
-MODULE_PACKAGES[gentoo]="x11-drivers/nvidia-drivers"
+# NVIDIA proprietary driver - keyed by package manager
+MODULE_PACKAGES[pacman]="nvidia nvidia-utils nvidia-settings"
+MODULE_PACKAGES[apt]="nvidia-driver libnvidia-gl-*.so.* nvidia-settings"
+MODULE_PACKAGES[dnf]="akmod-nvidia xorg-x11-drv-nvidia-cuda"
+MODULE_PACKAGES[zypper]="nvidia-driver-G06"
+MODULE_PACKAGES[apk]="nvidia nvidia-utils"
+MODULE_PACKAGES[xbps]="nvidia"
+MODULE_PACKAGES[emerge]="x11-drivers/nvidia-drivers"
 
 # Nouveau (open source - not recommended)
 declare -A MODULE_PACKAGES_NOUVEAU
-MODULE_PACKAGES_NOUVEAU[arch]="mesa xf86-video-nouveau"
-MODULE_PACKAGES_NOUVEAU[debian]="xserver-xorg-video-nouveau"
+MODULE_PACKAGES_NOUVEAU[pacman]="mesa xf86-video-nouveau"
+MODULE_PACKAGES_NOUVEAU[apt]="xserver-xorg-video-nouveau"
 
 # =============================================================================
 
 get_packages() {
-    local distro="$1"
+    local pkgmgr="$1"
     local driver="${BOOTSTRAP_NVIDIA_DRIVER:-nvidia}"
     
     if [[ "$driver" == "nouveau" ]]; then
-        echo "${MODULE_PACKAGES_NOUVEAU[$distro]}"
+        echo "${MODULE_PACKAGES_NOUVEAU[$pkgmgr]}"
     else
-        echo "${MODULE_PACKAGES[$distro]}"
+        echo "${MODULE_PACKAGES[$pkgmgr]}"
     fi
 }
 
@@ -110,26 +109,26 @@ module_proofs() {
 module_install() {
     echo "Installing $MODULE_NAME..."
     
-    local distro
-    distro=$(distro_detect)
+    local pkgmgr
+    pkgmgr=$(pkgmgr_detect) || { echo "ERROR: Cannot detect package manager"; return 1; }
     local init
     init=$(init_detect)
     local driver="${BOOTSTRAP_NVIDIA_DRIVER:-nvidia}"
     
-    echo "Detected: distro=$distro, init=$init"
+    echo "Detected: pkgmgr=$pkgmgr, init=$init"
     echo "Driver: $driver"
     
     # Get packages
     local packages
-    packages=$(get_packages "$distro")
+    packages=$(get_packages "$pkgmgr")
     
     if [[ -z "$packages" ]]; then
-        echo "Error: No packages defined for distro: $distro"
+        echo "Error: No packages defined for pkgmgr: $pkgmgr"
         return 1
     fi
     
     echo "Installing packages: $packages"
-    pkg_install "$packages"
+    pkg_install "$packages" "$pkgmgr"
     
     # Load driver
     echo "Loading $driver module..."
@@ -155,12 +154,12 @@ module_install() {
 # =============================================================================
 
 enable_driver() {
-    local distro
-    distro=$(distro_detect)
+    local pkgmgr
+    pkgmgr=$(pkgmgr_detect) || { echo "ERROR: Cannot detect package manager"; return 1; }
     local driver="${BOOTSTRAP_NVIDIA_DRIVER:-nvidia}"
     
-    case "$distro" in
-        arch)
+    case "$pkgmgr" in
+        pacman)
             if [[ "$driver" == "nvidia" ]] && [[ -f "/etc/mkinitcpio.conf" ]]; then
                 if ! grep -q "nvidia" /etc/mkinitcpio.conf; then
                     echo "Adding nvidia to mkinitcpio.conf..."

@@ -31,20 +31,19 @@ MODULE_PROVIDES=(
 )
 
 # =============================================================================
-# PACKAGE ADAPTATION (per distribution)
+# PACKAGE ADAPTATION (per package manager)
 # =============================================================================
 
 declare -A MODULE_PACKAGES
 
-# sway packages
-MODULE_PACKAGES[arch]="sway swayidle swaylock grim slurp"
-MODULE_PACKAGES[debian]="sway swayidle swaylock grim slurp"
-MODULE_PACKAGES[ubuntu]="sway swayidle swaylock grim slurp"
-MODULE_PACKAGES[fedora]="sway swayidle swaylock grim slurp"
-MODULE_PACKAGES[opensuse]="sway swayidle swaylock grim slurp"
-MODULE_PACKAGES[alpine]="sway swayidle swaylock grim slurp"
-MODULE_PACKAGES[void]="sway"
-MODULE_PACKAGES[gentoo]="x11-wm/sway x11-misc/swayidle x11-misc/swaylock media-gfx/grim x11-misc/slurp"
+# sway packages - keyed by package manager
+MODULE_PACKAGES[pacman]="sway swayidle swaylock grim slurp"
+MODULE_PACKAGES[apt]="sway swayidle swaylock grim slurp"
+MODULE_PACKAGES[dnf]="sway swayidle swaylock grim slurp"
+MODULE_PACKAGES[zypper]="sway swayidle swaylock grim slurp"
+MODULE_PACKAGES[apk]="sway swayidle swaylock grim slurp"
+MODULE_PACKAGES[xbps]="sway"
+MODULE_PACKAGES[emerge]="x11-wm/sway x11-misc/swayidle x11-misc/swaylock media-gfx/grim x11-misc/slurp"
 
 # =============================================================================
 # PROOF VERIFICATION
@@ -84,24 +83,24 @@ module_proofs() {
 module_install() {
     echo "Installing $MODULE_NAME..."
     
-    local distro
-    distro=$(distro_detect)
+    local pkgmgr
+    pkgmgr=$(pkgmgr_detect) || { echo "ERROR: Cannot detect package manager"; return 1; }
     local init
     init=$(init_detect)
     
-    echo "Detected: distro=$distro, init=$init"
+    echo "Detected: pkgmgr=$pkgmgr, init=$init"
     
-    # Get packages for this distro
-    local packages="${MODULE_PACKAGES[$distro]}"
+    # Get packages for this pkgmgr
+    local packages="${MODULE_PACKAGES[$pkgmgr]}"
     
     if [[ -z "$packages" ]]; then
-        echo "Error: No packages defined for distro: $distro"
-        echo "Supported distros: ${!MODULE_PACKAGES[*]}"
+        echo "Error: No packages defined for pkgmgr: $pkgmgr"
+        echo "Supported pkgmgrs: ${!MODULE_PACKAGES[*]}"
         return 1
     fi
     
     echo "Installing packages: $packages"
-    pkg_install "$packages"
+    pkg_install "$packages" "$pkgmgr"
     
     # Setup sway config
     setup_sway_config

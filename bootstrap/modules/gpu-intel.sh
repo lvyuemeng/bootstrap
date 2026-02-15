@@ -26,20 +26,19 @@ MODULE_PROVIDES=(
 )
 
 # =============================================================================
-# PACKAGE ADAPTATION (per distribution)
+# PACKAGE ADAPTATION (per package manager)
 # =============================================================================
 
 declare -A MODULE_PACKAGES
 
-# Intel GPU packages
-MODULE_PACKAGES[arch]="mesa intel-media-driver libva-intel-driver"
-MODULE_PACKAGES[debian]="xserver-xorg-video-intel mesa-vulkan-drivers intel-media-va-driver"
-MODULE_PACKAGES[ubuntu]="xserver-xorg-video-intel mesa-vulkan-drivers intel-media-va-driver"
-MODULE_PACKAGES[fedora]="mesa-dri-drivers mesa-vulkan-drivers intel-media-driver"
-MODULE_PACKAGES[opensuse]="mesa-dri-drivers Mesa-libGL1 intel-media-driver"
-MODULE_PACKAGES[alpine]="mesa mesa-intel driver libva-intel-driver"
-MODULE_PACKAGES[void]="mesa intel-ucode"
-MODULE_PACKAGES[gentoo]="media-libs/mesa x11-drivers/xf86-video-intel"
+# Intel GPU packages - keyed by package manager
+MODULE_PACKAGES[pacman]="mesa intel-media-driver libva-intel-driver"
+MODULE_PACKAGES[apt]="xserver-xorg-video-intel mesa-vulkan-drivers intel-media-va-driver"
+MODULE_PACKAGES[dnf]="mesa-dri-drivers mesa-vulkan-drivers intel-media-driver"
+MODULE_PACKAGES[zypper]="mesa-dri-drivers Mesa-libGL1 intel-media-driver"
+MODULE_PACKAGES[apk]="mesa mesa-intel driver libva-intel-driver"
+MODULE_PACKAGES[xbps]="mesa intel-ucode"
+MODULE_PACKAGES[emerge]="media-libs/mesa x11-drivers/xf86-video-intel"
 
 # =============================================================================
 # PROOF VERIFICATION
@@ -79,24 +78,24 @@ module_proofs() {
 module_install() {
     echo "Installing $MODULE_NAME..."
     
-    local distro
-    distro=$(distro_detect)
+    local pkgmgr
+    pkgmgr=$(pkgmgr_detect) || { echo "ERROR: Cannot detect package manager"; return 1; }
     local init
     init=$(init_detect)
     
-    echo "Detected: distro=$distro, init=$init"
+    echo "Detected: pkgmgr=$pkgmgr, init=$init"
     
-    # Get packages for this distro
-    local packages="${MODULE_PACKAGES[$distro]}"
+    # Get packages for this pkgmgr
+    local packages="${MODULE_PACKAGES[$pkgmgr]}"
     
     if [[ -z "$packages" ]]; then
-        echo "Error: No packages defined for distro: $distro"
-        echo "Supported distros: ${!MODULE_PACKAGES[*]}"
+        echo "Error: No packages defined for pkgmgr: $pkgmgr"
+        echo "Supported pkgmgrs: ${!MODULE_PACKAGES[*]}"
         return 1
     fi
     
     echo "Installing packages: $packages"
-    pkg_install "$packages"
+    pkg_install "$packages" "$pkgmgr"
     
     # Load i915 module
     echo "Loading i915 module..."
@@ -113,11 +112,11 @@ module_install() {
 # =============================================================================
 
 enable_early_kms() {
-    local distro
-    distro=$(distro_detect)
+    local pkgmgr
+    pkgmgr=$(pkgmgr_detect) || { echo "ERROR: Cannot detect package manager"; return 1; }
     
-    case "$distro" in
-        arch)
+    case "$pkgmgr" in
+        pacman)
             # Add i915 to mkinitcpio.conf
             if [[ -f "/etc/mkinitcpio.conf" ]]; then
                 if ! grep -q "i915" /etc/mkinitcpio.conf; then
@@ -127,7 +126,7 @@ enable_early_kms() {
                 fi
             fi
             ;;
-        debian|ubuntu)
+        apt)
             # Add i915 to initramfs
             echo "i915" | tee /etc/initramfs-tools/modules >/dev/null 2>&1 || true
             update-initramfs -u 2>/dev/null || true

@@ -27,16 +27,18 @@ MODULE_PROVIDES=(
 )
 
 # =============================================================================
-# PACKAGE ADAPTATION
+# PACKAGE ADAPTATION (per package manager)
 # =============================================================================
 
 declare -A MODULE_PACKAGES
 
-MODULE_PACKAGES[arch]="clipman"
-MODULE_PACKAGES[debian]="clipman"
-MODULE_PACKAGES[ubuntu]="clipman"
-MODULE_PACKAGES[fedora]="clipman"
-MODULE_PACKAGES[opensuse]="clipman"
+MODULE_PACKAGES[pacman]="clipman"
+MODULE_PACKAGES[apt]="clipman"
+MODULE_PACKAGES[dnf]="clipman"
+MODULE_PACKAGES[zypper]="clipman"
+MODULE_PACKAGES[apk]="clipman"
+MODULE_PACKAGES[xbps]="clipman"
+MODULE_PACKAGES[emerge]="clipman"
 
 # =============================================================================
 # PROOF & INSTALL
@@ -49,16 +51,16 @@ module_proofs() {
 
 module_install() {
     echo "Installing $MODULE_NAME..."
-    local distro
-    distro=$(distro_detect)
-    local packages="${MODULE_PACKAGES[$distro]}"
+    local pkgmgr
+    pkgmgr=$(pkgmgr_detect) || { echo "ERROR: Cannot detect package manager"; return 1; }
+    local packages="${MODULE_PACKAGES[$pkgmgr]}"
     
     if [[ -z "$packages" ]]; then
-        echo "No packages for $distro"
+        echo "No packages for $pkgmgr"
         return 1
     fi
     
-    pkg_install "$packages"
+    pkg_install "$packages" "$pkgmgr"
     autostart_add "clipman" 2>/dev/null || true
     echo "$MODULE_NAME installed"
 }

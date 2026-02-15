@@ -17,12 +17,13 @@ MODULE_REQUIRES=( "audio-pipewire" )
 MODULE_PROVIDES=( "audio:session-manager" )
 
 declare -A MODULE_PACKAGES
-MODULE_PACKAGES[arch]="wireplumber"
-MODULE_PACKAGES[debian]="wireplumber"
-MODULE_PACKAGES[ubuntu]="wireplumber"
-MODULE_PACKAGES[fedora]="wireplumber"
-MODULE_PACKAGES[opensuse]="wireplumber"
-MODULE_PACKAGES[alpine]="wireplumber"
+MODULE_PACKAGES[pacman]="wireplumber"
+MODULE_PACKAGES[apt]="wireplumber"
+MODULE_PACKAGES[dnf]="wireplumber"
+MODULE_PACKAGES[zypper]="wireplumber"
+MODULE_PACKAGES[apk]="wireplumber"
+MODULE_PACKAGES[xbps]="wireplumber"
+MODULE_PACKAGES[emerge]="wireplumber"
 
 module_proofs() {
     echo "Running proof checks for $MODULE_NAME..."
@@ -32,9 +33,9 @@ module_proofs() {
 
 module_install() {
     echo "Installing $MODULE_NAME..."
-    local distro
-    distro=$(distro_detect)
-    pkg_install "${MODULE_PACKAGES[$distro]}"
+    local pkgmgr
+    pkgmgr=$(pkgmgr_detect) || { echo "ERROR: Cannot detect package manager"; return 1; }
+    pkg_install "${MODULE_PACKAGES[$pkgmgr]}" "$pkgmgr"
     
     # Enable autostart
     autostart_add "wireplumber" 2>/dev/null || true

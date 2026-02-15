@@ -11,8 +11,11 @@ set -e
 BOOTSTRAP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Load core libraries
+source "${BOOTSTRAP_DIR}/lib/log.sh"
 source "${BOOTSTRAP_DIR}/lib/config.sh"
 source "${BOOTSTRAP_DIR}/lib/proof.sh"
+source "${BOOTSTRAP_DIR}/lib/deps.sh"
+source "${BOOTSTRAP_DIR}/lib/state.sh"
 source "${BOOTSTRAP_DIR}/lib/core.sh"
 
 # =============================================================================
@@ -26,29 +29,24 @@ Bootstrap - Composable Linux Bootstrap Framework
 Usage: bootstrap <command> [options]
 
 Commands:
-    install <module>     Install a module with proof verification
-    verify [module]       Verify installed module(s)
-    proof <module>        Run proof checks for module
-    chain <module>        Run bottom-to-top proof chain
-    template <name>       Render a config template
-    dotfiles <action>     Manage dotfiles integration
-                         actions: init, link, status
+    install <module>     Install module(s) with dependency resolution
+    deps <module>       Show dependency tree for module
+    verify [module]     Verify installed module(s)
+    proof <module>      Run proof checks for module
     
-    status                Show bootstrap status
-    reset                 Reset proof state (force re-verification)
-    help                  Show this help
+    status              Show bootstrap status
+    reset               Reset state (force re-install)
+    help                Show this help
 
 Environment:
-    BOOTSTRAP_DIR         Bootstrap installation directory
-    TARGET_ROOT           Target system root (default: /)
-    TARGET_USER           Target user (default: current user)
-    BOOTSTRAP_LINK_DOTFILES   Link configs to dotfiles repo
+    BOOTSTRAP_DIR       Bootstrap installation directory
+    TARGET_ROOT         Target system root (default: /)
+    TARGET_USER         Target user (default: current user)
 
 Examples:
-    bootstrap install dunst
-    bootstrap proof bluetooth-stack
-    bootstrap chain network-manager
-    bootstrap dotfiles init
+    bootstrap install sway
+    bootstrap deps sway
+    bootstrap verify
     bootstrap status
 
 EOF
@@ -62,7 +60,7 @@ cmd_install() {
     local module="$1"
     
     if [[ -z "$module" ]]; then
-        echo "Error: Module name required"
+        log_error "Module name required"
         echo "Usage: bootstrap install <module>"
         exit 1
     fi
@@ -70,15 +68,49 @@ cmd_install() {
     local module_file="${BOOTSTRAP_DIR}/modules/${module}.sh"
     
     if [[ ! -f "$module_file" ]]; then
-        echo "Error: Module not found: $module"
+        log_error "Module not found: $module"
         echo "Available modules:"
         ls -1 "${BOOTSTRAP_DIR}/modules/" 2>/dev/null || echo "  (none)"
         exit 1
     fi
     
-    echo "Installing module: $module"
-    load_module "$module"
-    install_module "$module"
+    # Resolve dependencies
+    log_info "Resolving dependencies for: $module"
+    local -a ordered
+    for m in $(deps_resolve "$module" 2>/dev/null); do
+        ordered+=("$m")
+    done
+    
+    log_info "Install order: ${ordered[*]}"
+    echo ""
+    
+    # Show category info (non-blocking warning for conflicting modules)
+    deps_show_category_info "${ordered[@]}"
+    echo ""
+    
+    # Install each module in order
+    for mod in "${ordered[@]}"; do
+        if state_is_installed "$mod"; then
+            log_info "Skipping $mod (already installed)"
+            continue
+        fi
+        
+        log_info "Installing: $mod"
+        load_module "$mod"
+        
+        if install_module "$mod"; then
+            state_set "$mod" "installed"
+            log_success "$mod installed"
+        else
+            state_set "$mod" "failed"
+            log_fail "$mod failed"
+            exit 1
+        fi
+        echo ""
+    done
+    
+    state_touch
+    log_success "Bootstrap complete!"
 }
 
 cmd_verify() {
@@ -91,21 +123,21 @@ cmd_verify() {
         local module_file="${BOOTSTRAP_DIR}/modules/${module}.sh"
         
         if [[ ! -f "$module_file" ]]; then
-            echo "Error: Module not found: $module"
+            log_error "Module not found: $module"
             exit 1
         fi
         
         source "$module_file"
         
         if declare -f "module_verify" >/dev/null; then
-            echo "Verifying: $module"
+            log_info "Verifying: $module"
             module_verify
         else
-            echo "No verify function for: $module"
+            log_warn "No verify function for: $module"
         fi
     else
         # Verify all modules
-        echo "Verifying all modules..."
+        log_info "Verifying all modules..."
         
         for mod_file in "${BOOTSTRAP_DIR}"modules/*.sh; do
             [[ -f "$mod_file" ]] || continue
@@ -129,7 +161,7 @@ cmd_proof() {
     local module="$1"
     
     if [[ -z "$module" ]]; then
-        echo "Error: Module name required"
+        log_error "Module name required"
         echo "Usage: bootstrap proof <module>"
         exit 1
     fi
@@ -139,7 +171,7 @@ cmd_proof() {
     local module_file="${BOOTSTRAP_DIR}/modules/${module}.sh"
     
     if [[ ! -f "$module_file" ]]; then
-        echo "Error: Module not found: $module"
+        log_error "Module not found: $module"
         exit 1
     fi
     
@@ -148,7 +180,7 @@ cmd_proof() {
     if declare -f "module_proofs" >/dev/null; then
         module_proofs
     else
-        echo "Running default proof checks..."
+        log_info "Running default proof checks..."
         proof_check "$module"
     fi
 }
@@ -157,7 +189,7 @@ cmd_chain() {
     local module="$1"
     
     if [[ -z "$module" ]]; then
-        echo "Error: Module name required"
+        log_error "Module name required"
         echo "Usage: bootstrap chain <module>"
         exit 1
     fi
@@ -177,8 +209,8 @@ cmd_chain() {
             proof_verify_chain "dunst" "dbus" "x11-server"
             ;;
         *)
-            echo "Unknown module for chain: $module"
-            echo "Supported: bluetooth-stack, network-manager, audio-pipewire, dunst"
+            log_error "Unknown module for chain: $module"
+            log_info "Supported: bluetooth-stack, network-manager, audio-pipewire, dunst"
             exit 1
             ;;
     esac
@@ -189,8 +221,8 @@ cmd_template() {
     local dest="${2:-}"
     
     if [[ -z "$name" ]]; then
-        echo "Available templates:"
-        ls -1 "${BOOTSTRAP_DIR}/templates/" 2>/dev/null || echo "  (none)"
+        log_info "Available templates:"
+        ls -1 "${BOOTSTRAP_DIR}/templates/" 2>/dev/null || log_info "  (none)"
         exit 0
     fi
     
@@ -203,9 +235,9 @@ cmd_template() {
         mkdir -p "$(dirname "$dest")"
     fi
     
-    echo "Rendering template: $name"
-    echo "  From: ${BOOTSTRAP_DIR}/templates/${name}/config"
-    echo "  To: $dest"
+    log_info "Rendering template: $name"
+    log_info "  From: ${BOOTSTRAP_DIR}/templates/${name}/config"
+    log_info "  To: $dest"
     
     config_render_template "${name}/config" "$dest"
 }
@@ -220,22 +252,22 @@ cmd_dotfiles() {
         link)
             local target="$2"
             if [[ -z "$target" ]]; then
-                echo "Usage: bootstrap dotfiles link <file>"
+                log_error "Usage: bootstrap dotfiles link <file>"
                 exit 1
             fi
             config_link_to_dotfiles "$target"
             ;;
         status)
-            echo "=== Dotfiles Status ==="
-            echo "Dotfiles dir: $CONFIG_DOTFILES_DIR"
+            log_info "=== Dotfiles Status ==="
+            log_info "Dotfiles dir: $CONFIG_DOTFILES_DIR"
             echo ""
             if [[ -d "$CONFIG_DOTFILES_DIR" ]]; then
-                echo "Files in dotfiles:"
+                log_info "Files in dotfiles:"
                 find "$CONFIG_DOTFILES_DIR" -type f | head -20
             fi
             ;;
         *)
-            echo "Usage: bootstrap dotfiles <init|link|status>"
+            log_error "Usage: bootstrap dotfiles <init|link|status>"
             exit 1
             ;;
     esac
@@ -247,7 +279,35 @@ cmd_status() {
 
 cmd_reset() {
     proof_reset
-    echo "Proof state reset"
+    state_clear
+    log_info "State reset"
+}
+
+cmd_deps() {
+    local module="$1"
+    
+    if [[ -z "$module" ]]; then
+        log_error "Module name required"
+        echo "Usage: bootstrap deps <module>"
+        exit 1
+    fi
+    
+    local module_file="${BOOTSTRAP_DIR}/modules/${module}.sh"
+    
+    if [[ ! -f "$module_file" ]]; then
+        log_error "Module not found: $module"
+        exit 1
+    fi
+    
+    log_info "Dependency tree for: $module"
+    echo ""
+    deps_tree "$module"
+    
+    echo ""
+    log_info "Install order:"
+    for m in $(deps_resolve "$module" 2>/dev/null); do
+        log_info "  $m"
+    done
 }
 
 # =============================================================================
@@ -261,6 +321,9 @@ shift || true
 case "$CMD" in
     install)
         cmd_install "$@"
+        ;;
+    deps)
+        cmd_deps "$@"
         ;;
     verify)
         cmd_verify "$@"
@@ -287,7 +350,7 @@ case "$CMD" in
         usage
         ;;
     *)
-        echo "Unknown command: $CMD"
+        log_error "Unknown command: $CMD"
         usage
         exit 1
         ;;

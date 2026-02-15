@@ -13,8 +13,11 @@ TARGET_ROOT="${TARGET_ROOT:-}"
 TARGET_USER="${TARGET_USER:-$(whoami)}"
 
 # Load dependencies
+source "${BOOTSTRAP_DIR}/lib/log.sh"
 source "${BOOTSTRAP_DIR}/lib/config.sh"
 source "${BOOTSTRAP_DIR}/lib/proof.sh"
+source "${BOOTSTRAP_DIR}/lib/deps.sh"
+source "${BOOTSTRAP_DIR}/lib/state.sh"
 
 # =============================================================================
 # Module System
@@ -31,7 +34,7 @@ load_module() {
     local module_file="$module_path/${module_name}.sh"
     
     if [[ ! -f "$module_file" ]]; then
-        echo "Error: Module not found: $module_name"
+        log_error "Module not found: $module_name"
         return 1
     fi
     
@@ -41,7 +44,7 @@ load_module() {
     # Register
     MODULE_REGISTRY["$module_name"]="$module_file"
     
-    echo "Loaded module: $module_name"
+    log_info "Loaded module: $module_name"
 }
 
 # Install a module (with config rendering and proof verification)
@@ -50,29 +53,26 @@ install_module() {
     local module_file="${MODULE_REGISTRY[$module_name]}"
     
     if [[ -z "$module_file" ]]; then
-        echo "Error: Module not registered: $module_name"
+        log_error "Module not registered: $module_name"
         return 1
     fi
     
-    echo ""
-    echo "========================================"
-    echo "Installing module: $module_name"
-    echo "========================================"
+    log_section "Installing module: $module_name"
     
     # Source module to get functions
     source "$module_file"
     
     # Check if module function exists
     if ! declare -f "module_install" >/dev/null; then
-        echo "Error: Module $module_name has no install function"
+        log_error "Module $module_name has no install function"
         return 1
     fi
     
     # Run pre-install proof (verify requirements)
-    if declare -f "module_prove" >/dev/null; then
-        echo "Running proof verification..."
-        module_prove || {
-            echo "Proof failed for $module_name"
+    if declare -f "module_proofs" >/dev/null; then
+        log_info "Running proof verification..."
+        module_proofs || {
+            log_error "Proof failed for $module_name"
             return 1
         }
     fi
@@ -82,14 +82,14 @@ install_module() {
     
     # Run post-install verification
     if declare -f "module_verify" >/dev/null; then
-        echo "Running post-install verification..."
+        log_info "Running post-install verification..."
         module_verify || {
-            echo "Verification failed for $module_name"
+            log_error "Verification failed for $module_name"
             return 1
         }
     fi
     
-    echo "Module $module_name installed successfully"
+    log_info "Module $module_name installed successfully"
 }
 
 # =============================================================================
@@ -102,11 +102,11 @@ render_module_configs() {
     local configs_dir="$BOOTSTRAP_DIR/configs/$module_name"
     
     if [[ ! -d "$configs_dir" ]]; then
-        echo "No configs directory for: $module_name"
+        log_debug "No configs directory for: $module_name"
         return 0
     fi
     
-    echo "Rendering configs for: $module_name"
+    log_info "Rendering configs for: $module_name"
     
     # Process each config template
     find "$configs_dir" -type f -name "*.conf" -o -name "*.ini" -o -name "*.cfg" | while read -r template; do
@@ -126,9 +126,9 @@ render_module_configs() {
 bootstrap() {
     local target_config="$1"  # Config file with module list
     
-    echo "Starting bootstrap..."
-    echo "Bootstrap directory: $BOOTSTRAP_DIR"
-    echo "Target root: $TARGET_ROOT"
+    log_section "Starting bootstrap"
+    log_info "Bootstrap directory: $BOOTSTRAP_DIR"
+    log_info "Target root: $TARGET_ROOT"
     echo ""
     
     # Initialize proof system
@@ -153,9 +153,12 @@ bootstrap() {
     
     # Install each module
     for mod in "${modules[@]}"; do
-        load_module "$mod" || continue
+        load_module "$mod" || {
+            log_error "Failed to load: $mod"
+            continue
+        }
         install_module "$mod" || {
-            echo "Failed to install: $mod"
+            log_error "Failed to install: $mod"
             continue
         }
     done
@@ -166,15 +169,15 @@ bootstrap() {
 
 # Quick verify all installed modules
 bootstrap_verify() {
-    echo "Running verification for all modules..."
+    log_info "Running verification for all modules..."
     proof_init
     
     for mod in "${!MODULE_REGISTRY[@]}"; do
         source "${MODULE_REGISTRY[$mod]}"
         
         if declare -f "module_verify" >/dev/null; then
-            echo "Verifying: $mod"
-            module_verify || echo "  ✗ Failed"
+            log_info "Verifying: $mod"
+            module_verify || log_error "  ✗ Failed"
         fi
     done
     
@@ -183,10 +186,10 @@ bootstrap_verify() {
 
 # Show bootstrap status
 bootstrap_status() {
-    echo "=== Bootstrap Status ==="
-    echo "Bootstrap Dir: $BOOTSTRAP_DIR"
-    echo "Target Root: $TARGET_ROOT"
-    echo "Target User: $TARGET_USER"
+    log_section "Bootstrap Status"
+    log_info "Bootstrap Dir: $BOOTSTRAP_DIR"
+    log_info "Target Root: $TARGET_ROOT"
+    log_info "Target User: $TARGET_USER"
     echo ""
     config_status
     echo ""
@@ -208,7 +211,7 @@ define_module() {
     
     # Default install (calls config render + verify)
     module_install() {
-        echo "Installing $MODULE_NAME: $MODULE_DESCRIPTION"
+        log_info "Installing $MODULE_NAME: $MODULE_DESCRIPTION"
         
         # Render configs if exist
         render_module_configs "$MODULE_NAME"
@@ -221,7 +224,7 @@ define_module() {
     
     # Default verify (runs proof checks)
     module_verify() {
-        echo "Verifying $MODULE_NAME..."
+        log_info "Verifying $MODULE_NAME..."
         local result=0
         
         if declare -f "module_proofs" >/dev/null; then
@@ -260,7 +263,7 @@ require() {
             proof_user "$req_value" || return 1
             ;;
         *)
-            echo "Unknown requirement type: $req_type"
+            log_error "Unknown requirement type: $req_type"
             return 1
             ;;
     esac

@@ -17,11 +17,13 @@ MODULE_REQUIRES=( "audio-pipewire" )
 MODULE_PROVIDES=( "audio:gui" )
 
 declare -A MODULE_PACKAGES
-MODULE_PACKAGES[arch]="qpwgraph"
-MODULE_PACKAGES[debian]="qpwgraph"
-MODULE_PACKAGES[ubuntu]="qpwgraph"
-MODULE_PACKAGES[fedora]="qpwgraph"
-MODULE_PACKAGES[opensuse]="qpwgraph"
+MODULE_PACKAGES[pacman]="qpwgraph"
+MODULE_PACKAGES[apt]="qpwgraph"
+MODULE_PACKAGES[dnf]="qpwgraph"
+MODULE_PACKAGES[zypper]="qpwgraph"
+MODULE_PACKAGES[apk]="qpwgraph"
+MODULE_PACKAGES[xbps]="qpwgraph"
+MODULE_PACKAGES[emerge]="qpwgraph"
 
 module_proofs() {
     echo "Running proof checks for $MODULE_NAME..."
@@ -30,9 +32,9 @@ module_proofs() {
 
 module_install() {
     echo "Installing $MODULE_NAME..."
-    local distro
-    distro=$(distro_detect)
-    pkg_install "${MODULE_PACKAGES[$distro]}"
+    local pkgmgr
+    pkgmgr=$(pkgmgr_detect) || { echo "ERROR: Cannot detect package manager"; return 1; }
+    pkg_install "${MODULE_PACKAGES[$pkgmgr]}" "$pkgmgr"
     echo "$MODULE_NAME installed"
 }
 

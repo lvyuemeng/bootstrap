@@ -10,6 +10,9 @@
 CONFIG_DOTFILES_DIR="${HOME}/.dotfiles"
 CONFIG_BACKUP_DIR="${HOME}/.dotfiles/backups"
 
+# Load logging
+source "${BOOTSTRAP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/lib/log.sh"
+
 # =============================================================================
 # Directory Operations
 # =============================================================================
@@ -147,7 +150,7 @@ config_copy() {
     
     # Copy file
     cp -r "$source" "$target"
-    echo "Copied: $source → $target"
+    log_info "Copied: $source → $target"
 }
 
 # Copy entire directory
@@ -180,7 +183,7 @@ config_copy_dir() {
     
     # Copy directory
     cp -r "$source" "$target"
-    echo "Copied: $source → $target"
+    log_info "Copied directory: $source → $target"
 }
 
 # =============================================================================
@@ -212,7 +215,7 @@ config_backup() {
     
     # Copy to backup
     cp -a "$path" "$backup_path"
-    echo "Backed up: $path → $backup_path"
+    log_info "Backed up: $path → $backup_path"
 }
 
 # =============================================================================
@@ -228,10 +231,10 @@ config_unlink() {
     
     if [[ -L "$path" ]]; then
         rm "$path"
-        echo "Removed link: $path"
+        log_info "Removed link: $path"
     elif [[ -f "$path" ]]; then
         rm "$path"
-        echo "Removed file: $path"
+        log_info "Removed file: $path"
     fi
 }
 
@@ -310,7 +313,7 @@ config_load() {
     for file in "${config_files[@]}"; do
         if [[ -f "$file" ]]; then
             source "$file"
-            echo "Loaded config: $file"
+            log_info "Loaded config: $file"
             return 0
         fi
     done
@@ -334,7 +337,7 @@ config_init_dotfiles() {
         git init "$CONFIG_DOTFILES_DIR" 2>/dev/null || true
     fi
     
-    echo "Initialized dotfiles: $CONFIG_DOTFILES_DIR"
+    log_info "Initialized dotfiles: $CONFIG_DOTFILES_DIR"
 }
 
 # Link config to dotfiles (legacy function)
@@ -358,7 +361,7 @@ config_link_to_dotfiles() {
     # Move existing file to dotfiles
     if [[ -f "$target_path" && ! -L "$target_path" ]]; then
         mv "$target_path" "$dotfiles_target"
-        echo "Moved to dotfiles: $target_path -> $dotfiles_target"
+        log_info "Moved to dotfiles: $target_path -> $dotfiles_target"
     fi
     
     # Create symlink
@@ -367,7 +370,7 @@ config_link_to_dotfiles() {
     fi
     ln -s "$dotfiles_target" "$target_path"
     
-    echo "Linked: $target_path -> $dotfiles_target"
+    log_info "Linked: $target_path -> $dotfiles_target"
 }
 
 # =============================================================================
@@ -388,7 +391,7 @@ autostart_add() {
     
     # Skip if already exists
     if [[ -f "$autostart_file" ]]; then
-        echo "Autostart already exists: $cmd"
+        log_warn "Autostart already exists: $cmd"
         return 0
     fi
     
@@ -421,7 +424,7 @@ autostart_remove() {
     
     if [[ -f "$autostart_file" ]]; then
         rm "$autostart_file"
-        echo "Removed autostart: $cmd"
+        log_info "Removed autostart: $cmd"
     fi
 }
 
@@ -431,8 +434,8 @@ autostart_remove() {
 
 # Show config status
 config_status() {
-    echo "=== Config Status ==="
-    echo "Dotfiles:     $CONFIG_DOTFILES_DIR"
-    echo "Backup dir:   $CONFIG_BACKUP_DIR"
-    echo "Config files: ~/.config/bootstrap.conf"
+    log_info "=== Config Status ==="
+    log_info "Dotfiles:     $CONFIG_DOTFILES_DIR"
+    log_info "Backup dir:   $CONFIG_BACKUP_DIR"
+    log_info "Config files: ~/.config/bootstrap.conf"
 }

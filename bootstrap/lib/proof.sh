@@ -12,6 +12,9 @@ PROOF_STATE_DIR="${BOOTSTRAP_DIR}/state"
 PROOF_VERIFIED_MODULES=()
 PROOF_FAILED_MODULES=()
 
+# Load logging
+source "${BOOTSTRAP_DIR}/lib/log.sh"
+
 # Proof result codes
 PROOF_PASS=0
 PROOF_FAIL=1
@@ -32,8 +35,8 @@ proof_init() {
         readarray -t PROOF_VERIFIED_MODULES < "$PROOF_STATE_DIR/verified.modules"
     fi
     
-    echo "Proof system initialized"
-    echo "Previously verified: ${#PROOF_VERIFIED_MODULES[@]} modules"
+    log_info "Proof system initialized"
+    log_info "Previously verified: ${#PROOF_VERIFIED_MODULES[@]} modules"
 }
 
 # Clear proof state (force re-verification)
@@ -42,7 +45,7 @@ proof_reset() {
     rm -rf "$PROOF_STATE_DIR"/*
     PROOF_VERIFIED_MODULES=()
     PROOF_FAILED_MODULES=()
-    echo "Proof state reset"
+    log_info "Proof state reset"
 }
 
 # Log proof result
@@ -102,14 +105,14 @@ proof_mark_verified() {
     
     PROOF_VERIFIED_MODULES+=("$module")
     proof_save_state
-    echo "[PROOF] ✓ $module verified"
+    log_success "[PROOF] $module verified"
 }
 
 # Mark module as failed
 proof_mark_failed() {
     local module="$1"
     PROOF_FAILED_MODULES+=("$module")
-    echo "[PROOF] ✗ $module failed verification"
+    log_fail "[PROOF] $module failed verification"
 }
 
 # =============================================================================
@@ -374,18 +377,17 @@ proof_verify_module() {
     shift
     local requirements=("$@")
     
-    echo ""
-    echo "=== Verifying module: $module ==="
+    log_info "=== Verifying module: $module ==="
     
     # Skip if already verified
     if proof_is_verified "$module"; then
-        echo "[PROOF] Module '$module' already verified, skipping"
+        log_info "[PROOF] Module '$module' already verified, skipping"
         return 0
     fi
     
     # Skip if previously failed (avoid infinite loops)
     if proof_has_failed "$module"; then
-        echo "[PROOF] Module '$module' previously failed, skipping"
+        log_warn "[PROOF] Module '$module' previously failed, skipping"
         return 1
     fi
     
@@ -428,10 +430,9 @@ proof_verify_chain() {
     shift
     local dependencies=("$@")
     
-    echo ""
-    echo "=== Bottom-to-Top Verification Chain ==="
-    echo "Target: $target"
-    echo "Dependencies: ${dependencies[*]}"
+    log_section "Bottom-to-Top Verification Chain"
+    log_info "Target: $target"
+    log_info "Dependencies: ${dependencies[*]}"
     echo ""
     
     local -A visited
@@ -484,12 +485,12 @@ proof_verify_chain() {
     
     if $failed; then
         echo ""
-        echo "[PROOF] Chain verification FAILED"
+        log_error "[PROOF] Chain verification FAILED"
         return 1
     fi
     
     echo ""
-    echo "[PROOF] Chain verification PASSED"
+    log_success "[PROOF] Chain verification PASSED"
     return 0
 }
 

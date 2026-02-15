@@ -17,11 +17,13 @@ MODULE_REQUIRES=( "x11-server" )
 MODULE_PROVIDES=( "desktop:clipboard" )
 
 declare -A MODULE_PACKAGES
-MODULE_PACKAGES[arch]="xsel"
-MODULE_PACKAGES[debian]="xsel"
-MODULE_PACKAGES[ubuntu]="xsel"
-MODULE_PACKAGES[fedora]="xsel"
-MODULE_PACKAGES[opensuse]="xsel"
+MODULE_PACKAGES[pacman]="xsel"
+MODULE_PACKAGES[apt]="xsel"
+MODULE_PACKAGES[dnf]="xsel"
+MODULE_PACKAGES[zypper]="xsel"
+MODULE_PACKAGES[apk]="xsel"
+MODULE_PACKAGES[xbps]="xsel"
+MODULE_PACKAGES[emerge]="xsel"
 
 module_proofs() {
     echo "Running proof checks for $MODULE_NAME..."
@@ -30,9 +32,9 @@ module_proofs() {
 
 module_install() {
     echo "Installing $MODULE_NAME..."
-    local distro
-    distro=$(distro_detect)
-    pkg_install "${MODULE_PACKAGES[$distro]}"
+    local pkgmgr
+    pkgmgr=$(pkgmgr_detect) || { echo "ERROR: Cannot detect package manager"; return 1; }
+    pkg_install "${MODULE_PACKAGES[$pkgmgr]}" "$pkgmgr"
     echo "$MODULE_NAME installed"
 }
 

@@ -30,18 +30,19 @@ MODULE_PROVIDES=(
 )
 
 # =============================================================================
-# PACKAGE ADAPTATION (per distribution)
+# PACKAGE ADAPTATION (per package manager)
 # =============================================================================
 
 declare -A MODULE_PACKAGES
 
 # hyprland packages - note: may need to be built from source on some distros
-MODULE_PACKAGES[arch]="hyprland"
-MODULE_PACKAGES[debian]="hyprland"
-MODULE_PACKAGES[ubuntu]="hyprland"
-MODULE_PACKAGES[fedora]="hyprland"
-MODULE_PACKAGES[opensuse]="hyprland"
-MODULE_PACKAGES[alpine]="hyprland"
+MODULE_PACKAGES[pacman]="hyprland"
+MODULE_PACKAGES[apt]="hyprland"
+MODULE_PACKAGES[dnf]="hyprland"
+MODULE_PACKAGES[zypper]="hyprland"
+MODULE_PACKAGES[apk]="hyprland"
+MODULE_PACKAGES[xbps]="hyprland"
+MODULE_PACKAGES[emerge]="hyprland"
 
 # =============================================================================
 # PROOF VERIFICATION
@@ -81,25 +82,25 @@ module_proofs() {
 module_install() {
     echo "Installing $MODULE_NAME..."
     
-    local distro
-    distro=$(distro_detect)
+    local pkgmgr
+    pkgmgr=$(pkgmgr_detect) || { echo "ERROR: Cannot detect package manager"; return 1; }
     local init
     init=$(init_detect)
     
-    echo "Detected: distro=$distro, init=$init"
+    echo "Detected: pkgmgr=$pkgmgr, init=$init"
     
-    # Get packages for this distro
-    local packages="${MODULE_PACKAGES[$distro]}"
+    # Get packages for this pkgmgr
+    local packages="${MODULE_PACKAGES[$pkgmgr]}"
     
     if [[ -z "$packages" ]]; then
-        echo "Error: No packages defined for distro: $distro"
-        echo "Supported distros: ${!MODULE_PACKAGES[*]}"
+        echo "Error: No packages defined for pkgmgr: $pkgmgr"
+        echo "Supported pkgmgrs: ${!MODULE_PACKAGES[*]}"
         echo "Note: hyprland may need to be built from source on this distro"
         return 1
     fi
     
     echo "Installing packages: $packages"
-    pkg_install "$packages"
+    pkg_install "$packages" "$pkgmgr"
     
     # Setup hyprland config
     setup_hyprland_config

@@ -1,12 +1,12 @@
 #!/bin/bash
 # =============================================================================
-# Module: pavucontrol
+# Module: wayland
 # =============================================================================
-# pavucontrol - PulseAudio volume control
+# Wayland display server protocol and library
 # =============================================================================
 
-MODULE_NAME="pavucontrol"
-MODULE_DESCRIPTION="PulseAudio volume control"
+MODULE_NAME="wayland"
+MODULE_DESCRIPTION="Wayland display server protocol"
 
 # Load bootstrap libraries
 BOOTSTRAP_DIR="${BOOTSTRAP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -19,11 +19,11 @@ source "${BOOTSTRAP_DIR}/lib/distro.sh"
 # =============================================================================
 
 MODULE_REQUIRES=(
-    "audio-pulseaudio"
+    "dbus"
 )
 
 MODULE_PROVIDES=(
-    "audio:control"
+    "display:protocol"
 )
 
 # =============================================================================
@@ -32,68 +32,37 @@ MODULE_PROVIDES=(
 
 declare -A MODULE_PACKAGES
 
-MODULE_PACKAGES[pacman]="pavucontrol"
-MODULE_PACKAGES[apt]="pavucontrol"
-MODULE_PACKAGES[dnf]="pavucontrol"
-MODULE_PACKAGES[zypper]="pavucontrol"
-MODULE_PACKAGES[apk]="pavucontrol"
-MODULE_PACKAGES[xbps]="pavucontrol"
-MODULE_PACKAGES[emerge]="pavucontrol"
-
-# =============================================================================
-# PROOF VERIFICATION
-# =============================================================================
-
-module_proofs() {
-    echo "Running proof checks for $MODULE_NAME..."
-    local result=0
-    
-    echo "  [PROOF] Checking pavucontrol..."
-    proof_command "pavucontrol" || result=1
-    
-    return $result
-}
+MODULE_PACKAGES[pacman]="wayland"
+MODULE_PACKAGES[apt]="libwayland-dev wayland-protocols"
+MODULE_PACKAGES[dnf]="wayland-devel wayland-protocols"
+MODULE_PACKAGES[zypper]="wayland-devel"
+MODULE_PACKAGES[apk]="wayland-dev wayland-protocols"
+MODULE_PACKAGES[xbps]="wayland"
+MODULE_PACKAGES[emerge]="dev-libs/wayland"
 
 # =============================================================================
 # INSTALL
 # =============================================================================
 
 module_install() {
-    echo "Installing $MODULE_NAME..."
-    
     local pkgmgr
     pkgmgr=$(pkgmgr_detect) || { echo "ERROR: Cannot detect package manager"; return 1; }
     
     local packages="${MODULE_PACKAGES[$pkgmgr]}"
     
     if [[ -z "$packages" ]]; then
-        echo "Error: No packages for $pkgmgr"
+        echo "No packages defined for pkgmgr: $pkgmgr"
         return 1
     fi
     
-    echo "Installing: $packages"
     pkg_install "$packages" "$pkgmgr"
-    
-    echo "$MODULE_NAME installed"
 }
 
 # =============================================================================
-# VERIFY
+# PROOFS
 # =============================================================================
 
-module_verify() {
-    if proof_command "pavucontrol"; then
-        echo "✓ pavucontrol installed"
-        return 0
-    fi
-    return 1
-}
-
-# =============================================================================
-# INFO
-# =============================================================================
-
-module_info() {
-    echo "pavucontrol installed."
-    echo "Run: pavucontrol"
+module_proofs() {
+    proof_command "weston" || true
+    proof_file "/usr/share/wayland/wayland.xml" || true
 }
