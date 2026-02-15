@@ -42,44 +42,14 @@ config_ensure_dir "path"
 # Ensure directory exists (create if not)
 ```
 
-## Config Discovery
-
-```bash
-config_find "module-name"
-# Find user config in portable locations:
-# - ~/.dotfiles/<module>/
-# - ~/.config/<module>/
-# - ~/.config/chezmoi/home_<module>
-# - ~/.config/bootstrap/overrides/<module>
-
-config_find_file "module" "filename"
-# Find specific config file
-```
-
-## Autostart
-
-```bash
-autostart_add "command" [args...]
-# Add application to autostart (~/.config/autostart/)
-
-autostart_exists "command"
-# Check if autostart entry exists
-
-autostart_remove "command"
-# Remove autostart entry
-```
-
 ## Bootstrap Config
 
 ```bash
 config_load
-# Load ~/.config/bootstrap.conf
-
-config_get_modules
-# Get modules list from BOOTSTRAP_MODULES env var
-
-config_init_dotfiles
-# Initialize ~/.dotfiles directory
+# Load bootstrap.conf from:
+#   - ~/.config/bootstrap.conf
+#   - ~/.config/bootstrap/bootstrap.conf
+#   - ~/.config/bootstrap.yaml
 
 config_status
 # Show config status
@@ -94,6 +64,8 @@ MODULE_NAME="module-name"
 MODULE_DESCRIPTION="Description"
 
 MODULE_REQUIRES=("dep1" "dep2")
+MODULE_OPTIONAL=("opt-dep1")
+
 MODULE_PROVIDES=("service:daemon")
 
 declare -A MODULE_PACKAGES
@@ -103,7 +75,36 @@ MODULE_PACKAGES[debian]="package-name"
 module_install() { ... }
 module_proofs() { ... }
 module_verify() { ... }
-module_info() { ... }
+```
+
+## Dependency Functions
+
+```bash
+deps_resolve "module1" "module2" ...
+# Resolve dependencies and return ordered list
+# Uses MODULE_REQUIRES from each module
+
+deps_order "module1" "module2" ...
+# Return installation order (topological sort)
+
+deps_satisfied "module" "module1" "module2"
+# Check if dependency is satisfied in the given list
+```
+
+## State Functions
+
+```bash
+state_load
+# Load state from ~/.config/bootstrap/state.json
+
+state_save
+# Save current state
+
+state_get "module"
+# Get state for specific module
+
+state_set "module" "installed"
+# Set module state
 ```
 
 ## Proof Functions
@@ -112,9 +113,12 @@ module_info() { ... }
 proof_command "cmd"        # Check command exists
 proof_process "name"        # Check process running
 proof_service_active "svc"  # Check systemd service
+proof_service_enabled "svc" # Check service is enabled
 proof_dbus_service "name"   # Check D-Bus service
 proof_kernel_module "mod"   # Check kernel module
 proof_file "path"          # Check file exists
+proof_user "name"          # Check user exists
+proof_network_interface "iface" # Check network interface
 ```
 
 ## Distro Functions
@@ -129,5 +133,6 @@ pkg_remove "packages"       # Remove packages
 svc_enable "service"        # Enable service
 svc_start "service"        # Start service
 svc_stop "service"         # Stop service
+svc_restart "service"      # Restart service
 svc_status "service"       # Check service status
 ```
